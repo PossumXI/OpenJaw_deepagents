@@ -36,8 +36,22 @@ jobs:
       issues: write
 
     steps:
+      - name: Detect org membership app config
+        id: org-membership-app
+        shell: bash
+        env:
+          ORG_MEMBERSHIP_APP_ID: ${{ secrets.ORG_MEMBERSHIP_APP_ID }}
+          ORG_MEMBERSHIP_APP_PRIVATE_KEY: ${{ secrets.ORG_MEMBERSHIP_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -n "${ORG_MEMBERSHIP_APP_ID}" && -n "${ORG_MEMBERSHIP_APP_PRIVATE_KEY}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::ORG_MEMBERSHIP_APP_ID/PRIVATE_KEY are not configured; contributor membership labels will be skipped."
+          fi
+
       - name: Generate GitHub App token
-        if: github.event.action == 'opened'
+        if: github.event.action == 'opened' && steps.org-membership-app.outputs.available == 'true'
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
@@ -45,7 +59,7 @@ jobs:
           private-key: ${{ secrets.ORG_MEMBERSHIP_APP_PRIVATE_KEY }}
 
       - name: Check org membership
-        if: github.event.action == 'opened'
+        if: github.event.action == 'opened' && steps.org-membership-app.outputs.available == 'true'
         id: check-membership
         uses: actions/github-script@v8
         with:
@@ -235,7 +249,7 @@ jobs:
             console.log(`PR #${prNumber}: +[${addList.join(', ')}] -[${removed.join(', ')}]`);
 
       - name: Add external label
-        if: github.event.action == 'opened' && steps.check-membership.outputs.is-external == 'true'
+        if: github.event.action == 'opened' && steps.org-membership-app.outputs.available == 'true' && steps.check-membership.outputs.is-external == 'true'
         uses: actions/github-script@v8
         with:
           # Use App token so the "labeled" event propagates to downstream
@@ -253,7 +267,7 @@ jobs:
             console.log(`Added 'external' label to PR #${prNumber}`);
 
       - name: Apply contributor tier label
-        if: github.event.action == 'opened' && steps.check-membership.outputs.is-external == 'true'
+        if: github.event.action == 'opened' && steps.org-membership-app.outputs.available == 'true' && steps.check-membership.outputs.is-external == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -297,7 +311,22 @@ jobs:
       issues: write
 
     steps:
+      - name: Detect org membership app config
+        id: org-membership-app
+        shell: bash
+        env:
+          ORG_MEMBERSHIP_APP_ID: ${{ secrets.ORG_MEMBERSHIP_APP_ID }}
+          ORG_MEMBERSHIP_APP_PRIVATE_KEY: ${{ secrets.ORG_MEMBERSHIP_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -n "${ORG_MEMBERSHIP_APP_ID}" && -n "${ORG_MEMBERSHIP_APP_PRIVATE_KEY}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::ORG_MEMBERSHIP_APP_ID/PRIVATE_KEY are not configured; backfill will skip contributor membership labels."
+          fi
+
       - name: Generate GitHub App token
+        if: steps.org-membership-app.outputs.available == 'true'
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
@@ -306,8 +335,10 @@ jobs:
 
       - name: Backfill labels on open PRs
         uses: actions/github-script@v8
+        env:
+          HAS_ORG_MEMBERSHIP_APP: ${{ steps.org-membership-app.outputs.available }}
         with:
-          github-token: ${{ steps.app-token.outputs.token }}
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
             const maxItems = parseInt('${{ inputs.max_items }}') || 100;
@@ -337,6 +368,12 @@ jobs:
 
               if (userType === 'Bot') {
                 const info = { isExternal: false, mergedCount: 0 };
+                contributorCache.set(author, info);
+                return info;
+              }
+
+              if (process.env.HAS_ORG_MEMBERSHIP_APP !== 'true') {
+                const info = { isExternal: null, mergedCount: 0 };
                 contributorCache.set(author, info);
                 return info;
               }
@@ -412,8 +449,10 @@ jobs:
               const info = await getContributorInfo(author, pr.user.type);
               const labels = new Set();
 
-              labels.add(info.isExternal ? 'external' : 'internal');
-              if (info.isExternal && info.mergedCount >= TRUSTED_THRESHOLD) {
+              if (info.isExternal !== null) {
+                labels.add(info.isExternal ? 'external' : 'internal');
+              }
+              if (info.isExternal === true && info.mergedCount >= TRUSTED_THRESHOLD) {
                 labels.add('trusted-contributor');
               }
 
