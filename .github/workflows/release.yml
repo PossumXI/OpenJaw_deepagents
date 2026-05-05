@@ -565,9 +565,13 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
 
       - name: Run integration tests
-        # Only run integration tests if they exist (currently only for deepagents package)
-        if: false # Temporarily disabled
-        run: make integration_test || echo "No integration tests found, skipping..."
+        shell: bash
+        run: |
+          if make -qp | awk -F: '/^integration_test:/ { found=1 } END { exit found ? 0 : 1 }'; then
+            make integration_test
+          else
+            echo "No integration_test target found, skipping."
+          fi
         working-directory: ${{ env.WORKING_DIR }}
 
   publish:
