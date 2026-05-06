@@ -90,7 +90,8 @@ jobs:
   # Trigger release workflow when CLI release PR is merged.
   # Keep publishing in a top-level workflow_dispatch run instead of a reusable
   # workflow_call. PyPI trusted publishing does not support reusable workflow
-  # OIDC claims reliably, and TestPyPI rejects those claims for this fork.
+  # OIDC claims reliably, and package uploads are gated in release.yml until
+  # TestPyPI/PyPI credentials or trusted publishers are configured.
   release-deepagents-cli:
     needs: release-please
     if: needs.release-please.outputs.cli-release == 'true'

@@ -31,8 +31,8 @@ To release the CLI:
 3. Review the generated changelog in the PR
 4. **Verify the SDK pin** — check that `deepagents==` in `libs/cli/pyproject.toml` is up to date. If the latest SDK version has been confirmed compatible, you should bump the pin on `main` and let release-please regenerate the PR before merging. See [Release Failed: CLI SDK Pin Mismatch](#release-failed-cli-sdk-pin-mismatch) for recovery if this is missed.
 5. Merge the release PR — this dispatches the top-level Package Release workflow,
-   waits for build/pre-release checks, publishes to TestPyPI and PyPI, then creates
-   the GitHub release.
+   waits for build/pre-release checks, and publishes only when the configured
+   publishing gate is enabled.
 
 > [!IMPORTANT]
 > When developing CLI features that depend on new SDK functionality, bump the SDK pin as part of that work — don't defer it to release time. The pin should always reflect the minimum SDK version the CLI actually requires!
@@ -116,10 +116,24 @@ claims reliably.
 1. **Build** - Creates distribution package
 2. **Collect Contributors** - Gathers PR authors for release notes, including social media handles. Excludes members of `langchain-ai`.
 3. **Release Notes** - Extracts changelog or generates from git log
-4. **Test PyPI** - Publishes to test.pypi.org for validation
-5. **Pre-release Checks** - Runs tests against the built package
-6. **Publish** - Publishes to PyPI
-7. **Mark Release** - Creates a published GitHub release with the built artifacts
+4. **Pre-release Checks** - Runs tests against the built package
+5. **Test PyPI** - Optionally publishes to test.pypi.org for validation from the top-level `release.yml` workflow
+6. **Publish** - Optionally publishes to PyPI from the top-level `release.yml` workflow
+7. **Mark Release** - Creates a published GitHub release with the built artifacts after PyPI publish succeeds
+
+> [!IMPORTANT]
+> PyPI trusted publishing does not support reusable workflows. The release-please workflow dispatches `release.yml` as a top-level `workflow_dispatch` run so PyPI can trust the workflow identity. Package upload jobs stay skipped until the matching repository variable is enabled.
+
+### Publishing Gates
+
+Publishing is disabled until credentials are ready and these repository variables are set. The same gates apply whether the upload uses a PyPI API token secret or trusted publishing:
+
+| Variable | Enables | Required PyPI/TestPyPI trusted publisher |
+| -------- | ------- | ---------------------------------------- |
+| `DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED=true` | TestPyPI upload | Repository `PossumXI/OpenJaw_deepagents`, workflow `.github/workflows/release.yml`, environment `testpypi` |
+| `DEEPAGENTS_PYPI_TRUSTED_PUBLISHING_ENABLED=true` | PyPI upload | Repository `PossumXI/OpenJaw_deepagents`, workflow `.github/workflows/release.yml`, environment `pypi` |
+
+If these variables are not set, release PR merges still run release-please, build, release-note generation, and pre-release tests, but package upload and GitHub release creation are skipped instead of failing.
 
 ### Release PR Labels
 
@@ -140,7 +154,7 @@ The Package Release workflow supports two publishing modes:
 
 - Preferred: PyPI/TestPyPI trusted publishing configured for repository
   `PossumXI/OpenJaw_deepagents`, workflow `.github/workflows/release.yml`, branch
-  `main`, with no environment unless the workflow is updated to set one.
+  `main`, with `testpypi` for TestPyPI and `pypi` for PyPI.
 - Fallback: repository secrets named `TEST_PYPI_API_TOKEN` and `PYPI_API_TOKEN`.
 
 Do not configure trusted publishers against `.github/workflows/release-please.yml`;
@@ -210,6 +224,17 @@ gh pr edit <PR_NUMBER> --remove-label "autorelease: pending" --add-label "autore
 ```
 
 The label update is non-fatal in the workflow (`|| true`), so the release itself succeeded—only the label needs fixing.
+
+### Trusted Publishing Fails With `invalid-publisher`
+
+If TestPyPI or PyPI reports `invalid-publisher`, compare the failure claims against the trusted publisher configured on PyPI/TestPyPI. The expected automated release claims are:
+
+- Repository: `PossumXI/OpenJaw_deepagents`
+- Workflow: `.github/workflows/release.yml`
+- TestPyPI environment: `testpypi`
+- PyPI environment: `pypi`
+
+Do not configure `.github/workflows/release-please.yml` as the trusted publisher for the automated release path. It only dispatches and watches the top-level Package Release workflow.
 
 ### Yanking a Release
 

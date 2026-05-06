@@ -4,7 +4,7 @@
 # - Automatically via workflow_call from release-please.yml when a release PR is merged
 # - Manually via workflow_dispatch
 #
-# Flow: build -> pre-release-checks -> test-pypi -> publish -> release
+# Flow: build -> pre-release-checks -> optional test-pypi -> optional publish -> release
 
 name: "🚀 Package Release"
 run-name: "Release ${{ inputs.package }}"
@@ -438,7 +438,9 @@ jobs:
       - setup
       - build
       - pre-release-checks
+    if: github.event_name != 'workflow_call' && vars.DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED == 'true'
     runs-on: ubuntu-latest
+    environment: testpypi
     permissions:
       # This permission is used for trusted publishing:
       # https://blog.pypi.org/posts/2023-04-20-introducing-trusted-publishers/
@@ -618,7 +620,15 @@ jobs:
       - build
       - test-pypi-publish
       - pre-release-checks
+    if: |
+      always() &&
+      github.event_name != 'workflow_call' &&
+      vars.DEEPAGENTS_PYPI_TRUSTED_PUBLISHING_ENABLED == 'true' &&
+      needs.build.result == 'success' &&
+      needs.pre-release-checks.result == 'success' &&
+      (vars.DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED != 'true' || needs.test-pypi-publish.result == 'success')
     runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       # This permission is used for trusted publishing:
       # https://blog.pypi.org/posts/2023-04-20-introducing-trusted-publishers/
@@ -691,7 +701,7 @@ jobs:
       - test-pypi-publish
       - pre-release-checks
       - publish
-    if: always() && needs.pre-release-checks.result == 'success' && needs.publish.result == 'success'
+    if: always() && github.event_name != 'workflow_call' && needs.pre-release-checks.result == 'success' && needs.publish.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       # This permission is needed by `ncipollo/release-action` to
