@@ -457,22 +457,29 @@ jobs:
           name: dist
           path: ${{ env.WORKING_DIR }}/dist/
 
-      - name: Detect TestPyPI API token
+      - name: Detect TestPyPI publish mode
         id: test-pypi-token
         shell: bash
         env:
           TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          TEST_PYPI_TRUSTED_PUBLISHING_ENABLED: ${{ vars.TEST_PYPI_TRUSTED_PUBLISHING_ENABLED }}
         run: |
           if [ -n "$TEST_PYPI_API_TOKEN" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "mode=token" >> "$GITHUB_OUTPUT"
             echo "Using TEST_PYPI_API_TOKEN for TestPyPI publish."
+          elif [ "$TEST_PYPI_TRUSTED_PUBLISHING_ENABLED" = "true" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "mode=trusted" >> "$GITHUB_OUTPUT"
+            echo "Using TestPyPI trusted publishing because TEST_PYPI_TRUSTED_PUBLISHING_ENABLED=true."
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "No TEST_PYPI_API_TOKEN configured; using trusted publishing for TestPyPI."
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            echo "No TEST_PYPI_API_TOKEN or explicit trusted-publishing opt-in configured; skipping TestPyPI publish."
           fi
 
       - name: Publish to test PyPI with API token
-        if: steps.test-pypi-token.outputs.available == 'true'
+        if: steps.test-pypi-token.outputs.mode == 'token'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ env.WORKING_DIR }}/dist/
@@ -489,7 +496,7 @@ jobs:
           attestations: false
 
       - name: Publish to test PyPI with trusted publishing
-        if: steps.test-pypi-token.outputs.available != 'true'
+        if: steps.test-pypi-token.outputs.mode == 'trusted'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ env.WORKING_DIR }}/dist/
@@ -502,6 +509,11 @@ jobs:
           skip-existing: true
           # Temp workaround since attestations are on by default as of gh-action-pypi-publish v1.11.0
           attestations: false
+
+      - name: Skip unconfigured TestPyPI publish
+        if: steps.test-pypi-token.outputs.mode == 'skip'
+        run: |
+          echo "TestPyPI publish skipped. Configure TEST_PYPI_API_TOKEN or set repository variable TEST_PYPI_TRUSTED_PUBLISHING_ENABLED=true after adding a matching TestPyPI trusted publisher."
 
   pre-release-checks:
     needs:
