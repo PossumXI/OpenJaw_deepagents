@@ -203,7 +203,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Run Deep Agents
-        uses: langchain-ai/deepagents@main
+        uses: langchain-ai/deepagents@b108c71d0c570e16c7050c1eac482e15dc35a5ed
         with:
           prompt: ${{ github.event_name != 'workflow_dispatch' && steps.build-prompt.outputs.prompt || github.event.inputs.prompt }}
           model: claude-sonnet-4-6
