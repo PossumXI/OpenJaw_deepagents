@@ -15,6 +15,11 @@ on:
         required: true
         type: string
         description: "Package to release"
+    secrets:
+      TEST_PYPI_API_TOKEN:
+        required: false
+      PYPI_API_TOKEN:
+        required: false
   workflow_dispatch:
     inputs:
       package:
@@ -452,7 +457,39 @@ jobs:
           name: dist
           path: ${{ env.WORKING_DIR }}/dist/
 
-      - name: Publish to test PyPI
+      - name: Detect TestPyPI API token
+        id: test-pypi-token
+        shell: bash
+        env:
+          TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        run: |
+          if [ -n "$TEST_PYPI_API_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Using TEST_PYPI_API_TOKEN for TestPyPI publish."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No TEST_PYPI_API_TOKEN configured; using trusted publishing for TestPyPI."
+          fi
+
+      - name: Publish to test PyPI with API token
+        if: steps.test-pypi-token.outputs.available == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ env.WORKING_DIR }}/dist/
+          verbose: true
+          print-hash: true
+          repository-url: https://test.pypi.org/legacy/
+          user: __token__
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          # We overwrite any existing distributions with the same name and version.
+          # This is *only for CI use* and is *extremely dangerous* otherwise!
+          # https://github.com/pypa/gh-action-pypi-publish#tolerating-release-package-file-duplicates
+          skip-existing: true
+          # Temp workaround since attestations are on by default as of gh-action-pypi-publish v1.11.0
+          attestations: false
+
+      - name: Publish to test PyPI with trusted publishing
+        if: steps.test-pypi-token.outputs.available != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ env.WORKING_DIR }}/dist/
@@ -609,7 +646,34 @@ jobs:
           name: dist
           path: ${{ env.WORKING_DIR }}/dist/
 
-      - name: Publish package distributions to PyPI
+      - name: Detect PyPI API token
+        id: pypi-token
+        shell: bash
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -n "$PYPI_API_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Using PYPI_API_TOKEN for PyPI publish."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No PYPI_API_TOKEN configured; using trusted publishing for PyPI."
+          fi
+
+      - name: Publish package distributions to PyPI with API token
+        if: steps.pypi-token.outputs.available == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ${{ env.WORKING_DIR }}/dist/
+          verbose: true
+          print-hash: true
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          # Temp workaround since attestations are on by default as of gh-action-pypi-publish v1.11.0
+          attestations: false
+
+      - name: Publish package distributions to PyPI with trusted publishing
+        if: steps.pypi-token.outputs.available != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ env.WORKING_DIR }}/dist/
