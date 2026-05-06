@@ -464,16 +464,16 @@ jobs:
         shell: bash
         env:
           TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          TEST_PYPI_TRUSTED_PUBLISHING_ENABLED: ${{ vars.TEST_PYPI_TRUSTED_PUBLISHING_ENABLED }}
+          DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED: ${{ vars.DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED }}
         run: |
           if [ -n "$TEST_PYPI_API_TOKEN" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
             echo "mode=token" >> "$GITHUB_OUTPUT"
             echo "Using TEST_PYPI_API_TOKEN for TestPyPI publish."
-          elif [ "$TEST_PYPI_TRUSTED_PUBLISHING_ENABLED" = "true" ]; then
+          elif [ "$DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED" = "true" ]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "mode=trusted" >> "$GITHUB_OUTPUT"
-            echo "Using TestPyPI trusted publishing because TEST_PYPI_TRUSTED_PUBLISHING_ENABLED=true."
+            echo "Using TestPyPI trusted publishing because DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED=true."
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "mode=skip" >> "$GITHUB_OUTPUT"
@@ -515,7 +515,7 @@ jobs:
       - name: Skip unconfigured TestPyPI publish
         if: steps.test-pypi-token.outputs.mode == 'skip'
         run: |
-          echo "TestPyPI publish skipped. Configure TEST_PYPI_API_TOKEN or set repository variable TEST_PYPI_TRUSTED_PUBLISHING_ENABLED=true after adding a matching TestPyPI trusted publisher."
+          echo "TestPyPI publish skipped. Configure TEST_PYPI_API_TOKEN or set repository variable DEEPAGENTS_TEST_PYPI_TRUSTED_PUBLISHING_ENABLED=true after adding a matching TestPyPI trusted publisher."
 
   pre-release-checks:
     needs:
@@ -673,13 +673,14 @@ jobs:
         shell: bash
         env:
           PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          DEEPAGENTS_PYPI_TRUSTED_PUBLISHING_ENABLED: ${{ vars.DEEPAGENTS_PYPI_TRUSTED_PUBLISHING_ENABLED }}
         run: |
           if [ -n "$PYPI_API_TOKEN" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
             echo "Using PYPI_API_TOKEN for PyPI publish."
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "No PYPI_API_TOKEN configured; using trusted publishing for PyPI."
+            echo "No PYPI_API_TOKEN configured; using trusted publishing for PyPI because DEEPAGENTS_PYPI_TRUSTED_PUBLISHING_ENABLED=$DEEPAGENTS_PYPI_TRUSTED_PUBLISHING_ENABLED."
           fi
 
       - name: Publish package distributions to PyPI with API token
