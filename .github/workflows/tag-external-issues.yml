@@ -16,7 +16,8 @@
 #    - ORG_MEMBERSHIP_APP_PRIVATE_KEY: Your app's private key
 #
 # The GitHub App token is required to check private organization membership.
-# Without it, the workflow will fail.
+# Without it, contributor classification is skipped instead of failing the
+# issue workflow.
 #
 # Contributor tier thresholds:
 #   - trusted-contributor: >= 5 merged PRs
@@ -44,14 +45,30 @@ jobs:
       issues: write
 
     steps:
+      - name: Detect org membership app config
+        id: org-membership-app
+        shell: bash
+        env:
+          ORG_MEMBERSHIP_APP_ID: ${{ secrets.ORG_MEMBERSHIP_APP_ID }}
+          ORG_MEMBERSHIP_APP_PRIVATE_KEY: ${{ secrets.ORG_MEMBERSHIP_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -n "${ORG_MEMBERSHIP_APP_ID}" && -n "${ORG_MEMBERSHIP_APP_PRIVATE_KEY}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::ORG_MEMBERSHIP_APP_ID/PRIVATE_KEY are not configured; contributor issue labels will be skipped."
+          fi
+
       - name: Generate GitHub App token
+        if: steps.org-membership-app.outputs.available == 'true'
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.ORG_MEMBERSHIP_APP_ID }}
           private-key: ${{ secrets.ORG_MEMBERSHIP_APP_PRIVATE_KEY }}
 
       - name: Check if contributor is external
+        if: steps.org-membership-app.outputs.available == 'true'
         id: check-membership
         uses: actions/github-script@v8
         with:
@@ -98,7 +115,7 @@ jobs:
             }
 
       - name: Add external label to issue
-        if: steps.check-membership.outputs.is-external == 'true'
+        if: steps.org-membership-app.outputs.available == 'true' && steps.check-membership.outputs.is-external == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -116,7 +133,7 @@ jobs:
             console.log(`Added 'external' label to issue #${issue_number}`);
 
       - name: Add internal label to issue
-        if: steps.check-membership.outputs.is-external == 'false'
+        if: steps.org-membership-app.outputs.available == 'true' && steps.check-membership.outputs.is-external == 'false'
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -134,7 +151,7 @@ jobs:
             console.log(`Added 'internal' label to issue #${issue_number}`);
 
       - name: Apply contributor tier label
-        if: steps.check-membership.outputs.is-external == 'true'
+        if: steps.org-membership-app.outputs.available == 'true' && steps.check-membership.outputs.is-external == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -181,14 +198,30 @@ jobs:
       issues: write
 
     steps:
+      - name: Detect org membership app config
+        id: org-membership-app
+        shell: bash
+        env:
+          ORG_MEMBERSHIP_APP_ID: ${{ secrets.ORG_MEMBERSHIP_APP_ID }}
+          ORG_MEMBERSHIP_APP_PRIVATE_KEY: ${{ secrets.ORG_MEMBERSHIP_APP_PRIVATE_KEY }}
+        run: |
+          if [[ -n "${ORG_MEMBERSHIP_APP_ID}" && -n "${ORG_MEMBERSHIP_APP_PRIVATE_KEY}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::ORG_MEMBERSHIP_APP_ID/PRIVATE_KEY are not configured; issue label backfill will be skipped."
+          fi
+
       - name: Generate GitHub App token
+        if: steps.org-membership-app.outputs.available == 'true'
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.ORG_MEMBERSHIP_APP_ID }}
           private-key: ${{ secrets.ORG_MEMBERSHIP_APP_PRIVATE_KEY }}
 
       - name: Backfill labels on open issues
+        if: steps.org-membership-app.outputs.available == 'true'
         uses: actions/github-script@v8
         with:
           github-token: ${{ steps.app-token.outputs.token }}
