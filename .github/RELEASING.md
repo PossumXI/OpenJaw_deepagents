@@ -30,7 +30,9 @@ To release the CLI:
 2. Wait for release-please to create/update the release PR
 3. Review the generated changelog in the PR
 4. **Verify the SDK pin** — check that `deepagents==` in `libs/cli/pyproject.toml` is up to date. If the latest SDK version has been confirmed compatible, you should bump the pin on `main` and let release-please regenerate the PR before merging. See [Release Failed: CLI SDK Pin Mismatch](#release-failed-cli-sdk-pin-mismatch) for recovery if this is missed.
-5. Merge the release PR — this triggers the build, pre-release checks, PyPI publish, and GitHub release
+5. Merge the release PR — this dispatches the top-level Package Release workflow,
+   waits for build/pre-release checks, publishes to TestPyPI and PyPI, then creates
+   the GitHub release.
 
 > [!IMPORTANT]
 > When developing CLI features that depend on new SDK functionality, bump the SDK pin as part of that work — don't defer it to release time. The pin should always reflect the minimum SDK version the CLI actually requires!
@@ -105,7 +107,11 @@ When release-please creates or updates a release PR, the `update-lockfiles` job 
 
 ### Release Pipeline
 
-The release workflow (`.github/workflows/release.yml`) runs when a release PR is merged:
+The release-please workflow dispatches the Package Release workflow
+(`.github/workflows/release.yml`) when a release PR is merged. Publishing must
+run as a top-level `workflow_dispatch` workflow rather than a reusable
+`workflow_call`; PyPI trusted publishing does not support reusable workflow
+claims reliably.
 
 1. **Build** - Creates distribution package
 2. **Collect Contributors** - Gathers PR authors for release notes, including social media handles. Excludes members of `langchain-ai`.
@@ -127,6 +133,18 @@ Release-please uses labels to track the state of release PRs:
 Because `skip-github-release: true` is set in the release-please config (we create releases via our own workflow instead of release-please), our `release.yml` workflow must update these labels manually. After successfully creating the GitHub release and tag, the `mark-release` job transitions the label from `pending` to `tagged`.
 
 This label transition signals to release-please that the merged PR has been fully processed, allowing it to create new release PRs for subsequent commits.
+
+### Publishing Credentials
+
+The Package Release workflow supports two publishing modes:
+
+- Preferred: PyPI/TestPyPI trusted publishing configured for repository
+  `PossumXI/OpenJaw_deepagents`, workflow `.github/workflows/release.yml`, branch
+  `main`, with no environment unless the workflow is updated to set one.
+- Fallback: repository secrets named `TEST_PYPI_API_TOKEN` and `PYPI_API_TOKEN`.
+
+Do not configure trusted publishers against `.github/workflows/release-please.yml`;
+that workflow only dispatches and watches the top-level release workflow.
 
 ## Manual Release
 
