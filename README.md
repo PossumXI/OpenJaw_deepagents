@@ -1,3 +1,6 @@
+> [!NOTE]
+> **Legacy Arobi research fork:** this repository preserves upstream Deep Agents work plus Arobi compatibility/research experiments. The current Arobi workspace product is **[Ullumii by Arobi](https://www.iorch.net/ullumii)**; `OpenJaw` / `OpenJaws` naming here is historical compatibility, not the current product brand. Upstream Deep Agents attribution and licensing remain unchanged.
+
 <div align="center">
   <a href="https://docs.langchain.com/oss/python/deepagents/overview#deep-agents-overview">
     <picture>
